@@ -6,7 +6,7 @@ The application allows users to upload SAR images, detect aircraft, compare pred
 
 ## Home Page
 
-![Home Page](screenshots/home.png)
+![Home Page](screenshot/home.png)
 ---
 
 ## Features
