@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AeroSentinel AI</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+
+body {
+  font-family:'Segoe UI',sans-serif;
+  background:#08080f; color:#e2e2ee;
+  min-height:100vh; overflow-x:hidden;
+}
+body::before {
+  content:""; position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse at 15% 25%,rgba(255,140,0,.06) 0%,transparent 55%),
+    radial-gradient(ellipse at 85% 75%,rgba(200,50,0,.06)  0%,transparent 55%);
+  z-index:-3; pointer-events:none;
+}
+
+/* ── Animated aircraft ─────────────────────────────────────── */
+.ac{position:fixed;opacity:.12;filter:invert(1);z-index:-1;pointer-events:none;}
+.ac1{width:160px;top:15%;animation:flyR 15s linear infinite;}
+.ac2{width:110px;top:70%;animation:flyL 22s linear infinite;}
+@keyframes flyR{0%{left:-200px}100%{left:110%}}
+@keyframes flyL{0%{left:110%;transform:scaleX(-1)}100%{left:-200px;transform:scaleX(-1)}}
+
+/* ── Header ────────────────────────────────────────────────── */
+header{
+  text-align:center;padding:38px 20px 22px;
+  border-bottom:1px solid rgba(255,255,255,.07);
+  background:linear-gradient(180deg,rgba(255,100,0,.09) 0%,transparent 100%);
+}
+header h1{
+  font-size:clamp(1.8rem,4.5vw,2.7rem);letter-spacing:3px;font-weight:900;
+  background:linear-gradient(90deg,#ff8c00,#ff4500,#dc143c);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 18px rgba(255,100,0,.35));
+}
+header p{margin-top:7px;opacity:.45;font-size:.86rem;letter-spacing:1px;}
+
+/* ── Nav ───────────────────────────────────────────────────── */
+nav{display:flex;justify-content:center;gap:8px;padding:18px 16px;flex-wrap:wrap;}
+.tab{
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+  color:#bbb;padding:9px 22px;border-radius:30px;cursor:pointer;
+  font-size:.88rem;font-weight:600;transition:all .2s;
+}
+.tab:hover{background:rgba(255,255,255,.1);color:#fff;}
+.tab.active{
+  background:linear-gradient(135deg,rgba(255,120,0,.22),rgba(220,20,60,.22));
+  border-color:rgba(255,120,0,.55);color:#fff;
+}
+
+/* ── Pages ─────────────────────────────────────────────────── */
+.page{display:none;padding:24px clamp(12px,4vw,44px) 56px;}
+.page.active{display:block;}
+
+/* ── Card ──────────────────────────────────────────────────── */
+.card{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;padding:26px;margin-bottom:22px;
+}
+.card h2{font-size:1.1rem;margin-bottom:18px;opacity:.9;}
+
+/* ── Upload zone ───────────────────────────────────────────── */
+.upzone{
+  border:2px dashed rgba(255,120,0,.35);border-radius:13px;
+  padding:30px 20px;text-align:center;cursor:pointer;
+  transition:border-color .2s,background .2s;margin-bottom:14px;position:relative;
+}
+.upzone:hover{border-color:rgba(255,120,0,.7);background:rgba(255,120,0,.04);}
+.upzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.upzone .ico{font-size:1.9rem;display:block;margin-bottom:6px;}
+.upzone strong{font-size:.95rem;}
+.upzone p{font-size:.78rem;opacity:.45;margin-top:4px;}
+
+/* ── Button ────────────────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  background:linear-gradient(135deg,#ff8c00,#dc143c);
+  color:#fff;border:none;padding:11px 28px;border-radius:30px;
+  cursor:pointer;font-weight:700;font-size:.9rem;
+  transition:transform .2s,opacity .2s;
+}
+.btn:hover{transform:scale(1.04);}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none;}
+.btn-sm{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
+  color:#ddd;padding:7px 16px;border-radius:20px;cursor:pointer;
+  font-size:.8rem;font-weight:600;transition:all .2s;text-decoration:none;
+}
+.btn-sm:hover{background:rgba(255,255,255,.16);color:#fff;}
+.btn-ghost{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);
+  color:#ccc;padding:8px 20px;border-radius:20px;cursor:pointer;
+  font-size:.82rem;font-weight:600;transition:all .2s;
+}
+.btn-ghost:hover{background:rgba(255,255,255,.12);color:#fff;}
+
+/* ── Action bar ────────────────────────────────────────────── */
+.action-bar{
+  display:none;gap:10px;flex-wrap:wrap;
+  align-items:center;margin-top:14px;
+}
+
+/* ── Loader ────────────────────────────────────────────────── */
+.loader{display:none;justify-content:center;padding:22px;}
+.spinner{
+  width:38px;height:38px;border:4px solid rgba(255,255,255,.1);
+  border-top-color:#ff8c00;border-radius:50%;animation:spin .75s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Image viewer wrapper ──────────────────────────────────── */
+.viewer-wrap{
+  position:relative;overflow:hidden;
+  background:#000;border-radius:10px;
+  min-height:160px;
+}
+.viewer-wrap img{
+  display:block;width:100%;
+  transform-origin:center center;
+  transition:transform .15s ease;
+  pointer-events:none;
+}
+.viewer-wrap .img-ph{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:2.5rem;opacity:.2;
+}
+
+/* ── Zoom controls ─────────────────────────────────────────── */
+.zoom-bar{
+  display:flex;gap:6px;align-items:center;
+  margin-top:6px;
+}
+.zoom-btn{
+  background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.15);
+  color:#ccc;width:30px;height:30px;border-radius:8px;cursor:pointer;
+  font-size:1rem;font-weight:700;display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.zoom-btn:hover{background:rgba(255,255,255,.2);color:#fff;}
+.zoom-label{font-size:.72rem;opacity:.45;min-width:38px;text-align:center;}
+
+/* ── Image grid ────────────────────────────────────────────── */
+.img-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;}
+@media(max-width:580px){.img-grid{grid-template-columns:1fr;}}
+.img-box{
+  background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.07);
+  border-radius:12px;overflow:visible;display:flex;flex-direction:column;
+}
+.img-box-lbl{
+  font-size:.7rem;font-weight:700;letter-spacing:1px;
+  padding:8px 14px;opacity:.5;text-transform:uppercase;
+  border-bottom:1px solid rgba(255,255,255,.05);
+  border-radius:12px 12px 0 0;
+}
+
+/* ── Detection tags ────────────────────────────────────────── */
+#detections{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+.tag{
+  background:rgba(255,120,0,.1);border:1px solid rgba(255,120,0,.28);
+  border-radius:20px;padding:5px 13px;font-size:.79rem;
+}
+.tag-gt{background:rgba(0,255,80,.09);border-color:rgba(0,255,80,.3);}
+.tag-info{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);opacity:.6;}
+
+/* ── Legend ────────────────────────────────────────────────── */
+.legend{display:none;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:.8rem;opacity:.7;}
+.ldot{width:11px;height:11px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle;}
+
+/* ── Metrics row (analytics) ───────────────────────────────── */
+.metrics-row{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:14px;margin-bottom:22px;
+}
+.mc{
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);
+  border-radius:14px;padding:18px 12px;text-align:center;
+}
+.mv{
+  font-size:1.85rem;font-weight:800;
+  background:linear-gradient(90deg,#ff8c00,#dc143c);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.ml{font-size:.72rem;opacity:.5;margin-top:4px;}
+.mc.highlight{border-color:rgba(255,120,0,.4);background:rgba(255,120,0,.08);}
+
+/* ── Chart ─────────────────────────────────────────────────── */
+.chart-box{
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
+  border-radius:14px;padding:20px;margin-bottom:22px;
+}
+.chart-box h3{font-size:.88rem;opacity:.65;margin-bottom:14px;}
+
+/* ── Confusion matrix ──────────────────────────────────────── */
+.cm-wrap{overflow-x:auto;margin-top:14px;}
+#cm{display:inline-grid;gap:3px;}
+.cm-cell{
+  width:62px;height:46px;display:flex;align-items:center;
+  justify-content:center;border-radius:6px;font-size:.78rem;font-weight:700;
+  position:relative;cursor:default;
+}
+.cm-cell:hover::after{
+  content:attr(data-tip);
+  position:absolute;bottom:110%;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.92);color:#fff;font-size:.65rem;font-weight:400;
+  padding:5px 10px;border-radius:7px;white-space:nowrap;z-index:20;
+  pointer-events:none;border:1px solid rgba(255,255,255,.1);
+}
+.cm-hdr{
+  width:62px;height:46px;background:rgba(255,255,255,.06);
+  display:flex;align-items:center;justify-content:center;
+  border-radius:6px;font-size:.62rem;font-weight:600;
+  opacity:.65;text-align:center;padding:3px;word-break:break-all;
+}
+.cm-axis{
+  writing-mode:vertical-rl;transform:rotate(180deg);
+  font-size:.65rem;opacity:.4;text-align:center;padding:4px;
+}
+.cm-note{font-size:.72rem;opacity:.4;margin-top:8px;}
+.cm-empty{text-align:center;padding:40px 20px;opacity:.35;font-size:.88rem;}
+.cm-info{
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:10px;margin-bottom:12px;
+}
+.cm-badge{
+  background:rgba(255,120,0,.12);border:1px solid rgba(255,120,0,.3);
+  border-radius:20px;padding:4px 14px;font-size:.76rem;
+}
+.cm-legend{
+  display:flex;gap:16px;flex-wrap:wrap;
+  margin-top:10px;font-size:.76rem;opacity:.65;
+}
+.cm-ldot{
+  width:12px;height:12px;border-radius:3px;
+  display:inline-block;margin-right:5px;vertical-align:middle;
+}
+
+/* ── Batch grid ────────────────────────────────────────────── */
+.batch-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:16px;margin-top:16px;
+}
+.bi{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:13px;overflow:hidden;
+}
+.bi-img-wrap{position:relative;overflow:hidden;background:#000;height:160px;}
+.bi-img-wrap img{width:100%;height:160px;object-fit:cover;transform-origin:center center;pointer-events:none;}
+.bi-foot{padding:10px 12px;font-size:.76rem;opacity:.65;line-height:1.7;}
+.bi-actions{
+  padding:8px 12px;display:flex;gap:8px;align-items:center;
+  border-top:1px solid rgba(255,255,255,.05);
+}
+.bi-zoom-btn{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+  color:#ccc;width:26px;height:26px;border-radius:6px;cursor:pointer;
+  font-size:.9rem;display:flex;align-items:center;justify-content:center;
+  transition:background .15s;
+}
+.bi-zoom-btn:hover{background:rgba(255,255,255,.18);}
+
+/* ── About ─────────────────────────────────────────────────── */
+.about-wrap{max-width:780px;margin:0 auto;}
+.about-section{
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;padding:30px;margin-bottom:18px;
+}
+.about-section h3{
+  font-size:1rem;font-weight:700;margin-bottom:10px;
+  background:linear-gradient(90deg,#ff8c00,#dc143c);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.about-section p{opacity:.7;font-size:.9rem;line-height:1.85;margin-bottom:10px;}
+.about-section p:last-child{margin-bottom:0;}
+.app-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:14px;margin-top:14px;
+}
+.app-card{
+  background:rgba(255,120,0,.07);border:1px solid rgba(255,120,0,.2);
+  border-radius:12px;padding:16px;
+}
+.app-card .app-icon{font-size:1.6rem;margin-bottom:6px;}
+.app-card h4{font-size:.88rem;margin-bottom:5px;color:#ffb060;}
+.app-card p{font-size:.78rem;opacity:.65;line-height:1.65;}
+
+/* ── Footer ────────────────────────────────────────────────── */
+footer{
+  text-align:center;padding:16px;font-size:.78rem;opacity:.28;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+
+/* ── Toast ─────────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:26px;left:50%;
+  transform:translateX(-50%) translateY(90px);
+  background:rgba(8,8,18,.96);border:1px solid rgba(255,120,0,.3);
+  color:#e2e2ee;padding:11px 26px;border-radius:30px;font-size:.84rem;
+  z-index:999;transition:transform .3s ease;pointer-events:none;white-space:nowrap;
+}
+#toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<img src="aircraft.png" class="ac ac1" alt="">
+<img src="aircraft.png" class="ac ac2" alt="">
+<div id="toast"></div>
+
+<!-- ══ HEADER ══════════════════════════════════════════════════════ -->
+<header>
+  <h1>✈ AeroSentinel AI</h1>
+  <p>SAR Aircraft Detection &nbsp;·&nbsp; Deep Learning Surveillance System</p>
+</header>
+
+<!-- ══ NAV ════════════════════════════════════════════════════════ -->
+<nav>
+  <button class="tab active" onclick="goTab('single',this)">🔍 Single Detection</button>
+  <button class="tab"        onclick="goTab('batch',this)">🗂 Batch Detection</button>
+  <button class="tab"        onclick="goTab('analytics',this)">📊 Analytics</button>
+  <button class="tab"        onclick="goTab('about',this)">ℹ About</button>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     SINGLE DETECTION
+══════════════════════════════════════════════════════════════════ -->
+<section class="page active" id="page-single">
+<div class="card">
+  <h2>🔍 Single Image Detection</h2>
+
+  <div class="upzone">
+    <span class="ico">📷</span>
+    <strong>Click or drag SAR image here</strong>
+    <p>JPG · PNG · BMP</p>
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+
+  <button class="btn" id="detectBtn" onclick="runDetection()" disabled>
+    ▶ Run Detection
+  </button>
+
+  <div class="loader" id="singleLoader"><div class="spinner"></div></div>
+
+  <!-- Image grid -->
+  <div class="img-grid">
+    <!-- Input -->
+    <div class="img-box">
+      <div class="img-box-lbl">Input Image</div>
+      <div class="viewer-wrap" id="inputViewer">
+        <div class="img-ph">🖼</div>
+        <img id="inputImg" style="display:none">
+      </div>
+      <div class="zoom-bar">
+        <button class="zoom-btn" onclick="zoom('inputViewer',-0.25)">−</button>
+        <span class="zoom-label" id="inputViewer-lbl">100%</span>
+        <button class="zoom-btn" onclick="zoom('inputViewer', 0.25)">+</button>
+        <button class="zoom-btn" title="Reset" onclick="zoomReset('inputViewer')" style="font-size:.7rem;">⟳</button>
+      </div>
+    </div>
+    <!-- Result -->
+    <div class="img-box">
+      <div class="img-box-lbl">Detection Result</div>
+      <div class="viewer-wrap" id="resultViewer">
+        <div class="img-ph">🎯</div>
+        <img id="resultImg" style="display:none">
+      </div>
+      <div class="zoom-bar">
+        <button class="zoom-btn" onclick="zoom('resultViewer',-0.25)">−</button>
+        <span class="zoom-label" id="resultViewer-lbl">100%</span>
+        <button class="zoom-btn" onclick="zoom('resultViewer', 0.25)">+</button>
+        <button class="zoom-btn" title="Reset" onclick="zoomReset('resultViewer')" style="font-size:.7rem;">⟳</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action bar — download + legend -->
+  <div class="action-bar" id="singleActionBar">
+    <button class="btn-sm" id="downloadSingleBtn" onclick="downloadResult()">⬇ Download Result</button>
+    <span style="flex:1"></span>
+    <span class="legend" id="legend" style="display:flex;">
+      <span><span class="ldot" style="background:#00ff55;"></span>Ground Truth</span>
+      <span><span class="ldot" style="background:#ff3333;"></span>Prediction</span>
+    </span>
+  </div>
+
+  <div id="detections"></div>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     BATCH DETECTION
+══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="page-batch">
+<div class="card">
+  <h2>🗂 Batch Detection</h2>
+  <div class="upzone">
+    <span class="ico">📁</span>
+    <strong>Upload multiple SAR images</strong>
+    <p>JPG · PNG · BMP</p>
+    <input type="file" id="batchInput" multiple accept="image/*">
+  </div>
+  <button class="btn" onclick="runBatch()">▶ Run Batch</button>
+  <div class="loader" id="batchLoader"><div class="spinner"></div></div>
+  <div class="batch-grid" id="batchResults"></div>
+</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     ANALYTICS
+══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="page-analytics">
+
+  <div class="metrics-row">
+    <div class="mc highlight"><div class="mv" id="mAcc">--</div><div class="ml">Accuracy</div></div>
+    <div class="mc highlight"><div class="mv" id="mPre">--</div><div class="ml">Precision</div></div>
+    <div class="mc highlight"><div class="mv" id="mRec">--</div><div class="ml">Recall</div></div>
+    <div class="mc highlight"><div class="mv" id="mM50">--</div><div class="ml">mAP@0.5</div></div>
+  </div>
+
+  <div class="chart-box">
+    <h3>📈 Combined Detection Performance (Single + Batch)</h3>
+    <canvas id="barChart"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>🔲 Combined Confusion Matrix</h2>
+    <p style="font-size:.78rem;opacity:.45;margin-bottom:12px;">
+      Combines all single and batch detections this session.
+      Rows = Predicted &nbsp;·&nbsp; Columns = Actual (Ground Truth)
+    </p>
+    <div class="cm-info">
+      <span class="cm-badge" id="cmBadge">🔄 No detections yet</span>
+      <button class="btn-ghost" onclick="clearSession()">🗑 Reset All</button>
+    </div>
+    <div class="cm-wrap"><div id="cm">
+      <div class="cm-empty">Run detections to populate the matrix.</div>
+    </div></div>
+    <div class="cm-legend" id="cmLegend" style="display:none;">
+      <span><span class="cm-ldot" style="background:rgba(255,160,0,.85);"></span>Correct (diagonal)</span>
+      <span><span class="cm-ldot" style="background:rgba(220,30,30,.75);"></span>Misclassified (off-diagonal)</span>
+      <span><span class="cm-ldot" style="background:rgba(255,255,255,.06);"></span>Zero</span>
+    </div>
+    <p class="cm-note">
+      Hover any cell for details &nbsp;|&nbsp;
+      Only IoU ≥ 0.45 GT↔Pred matched pairs are counted
+    </p>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     ABOUT
+══════════════════════════════════════════════════════════════════ -->
+<section class="page" id="page-about">
+<div class="about-wrap">
+
+  <div class="about-section">
+    <h3>🛰 What is AeroSentinel AI?</h3>
+    <p>
+      AeroSentinel AI is an operational deep learning system engineered for the
+      automated detection and classification of aircraft in Synthetic Aperture
+      Radar (SAR) imagery. Unlike optical cameras, SAR sensors can penetrate
+      clouds, smoke, and darkness, making round-the-clock surveillance possible
+      in all weather conditions — a capability critical for modern defense and
+      intelligence operations.
+    </p>
+    <p>
+      Detections are overlaid with color-coded bounding boxes and compared against
+      ground-truth annotations for transparent performance validation. A combined
+      confusion matrix and live metrics update across every single and batch
+      detection run in the session.
+    </p>
+  </div>
+
+  <div class="about-section">
+    <h3>🎯 Real-World Applications</h3>
+    <div class="app-grid">
+      <div class="app-card">
+        <div class="app-icon">🛡</div>
+        <h4>Defense &amp; Border Security</h4>
+        <p>Continuous wide-area airspace monitoring to detect unauthorized aircraft
+        near restricted zones and national borders without operator fatigue.</p>
+      </div>
+      <div class="app-card">
+        <div class="app-icon">🏛</div>
+        <h4>Airport Management</h4>
+        <p>Automated tarmac surveillance to track aircraft movements and parking bays
+        even in dense fog or heavy rain when optical cameras fail.</p>
+      </div>
+      <div class="app-card">
+        <div class="app-icon">🌊</div>
+        <h4>Maritime &amp; Coastal Patrol</h4>
+        <p>Detection of low-flying aircraft and seaplanes over open ocean where
+        cloud cover is persistent and optical coverage sparse.</p>
+      </div>
+      <div class="app-card">
+        <div class="app-icon">🌍</div>
+        <h4>Humanitarian &amp; Disaster Response</h4>
+        <p>Rapid assessment of airstrips in disaster-hit regions to coordinate
+        relief aircraft logistics from satellite imagery alone.</p>
+      </div>
+      <div class="app-card">
+        <div class="app-icon">🔬</div>
+        <h4>Intelligence &amp; Reconnaissance</h4>
+        <p>Automated exploitation of satellite SAR data to monitor airfield
+        activity and generate change-detection reports over time.</p>
+      </div>
+      <div class="app-card">
+        <div class="app-icon">📡</div>
+        <h4>Remote Sensing Research</h4>
+        <p>A benchmark platform for testing new SAR detection architectures
+        and domain-adaptation techniques in aerospace computer-vision research.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</section>
+
+<footer>AeroSentinel AI &nbsp;·&nbsp; SAR Aircraft Detection &nbsp;·&nbsp; Powered by YOLOv8 + FastAPI</footer>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════════════ -->
+<script>
+const API = "http://127.0.0.1:8000";
+let barInst = null;
+
+// Track result URL for forced download
+let currentResultUrl  = "";
+let currentResultName = "";
+
+/* ─── Viewer state (zoom only, no mouse drag/wheel) ──────────── */
+const viewers = {};
+function getViewer(id){
+  if(!viewers[id]) viewers[id] = { scale: 1 };
+  return viewers[id];
+}
+
+function applyTransform(id){
+  const v   = getViewer(id);
+  const img = document.querySelector(`#${id} img`);
+  if(!img) return;
+  img.style.transform = `scale(${v.scale})`;
+  const lbl = document.getElementById(`${id}-lbl`);
+  if(lbl) lbl.textContent = Math.round(v.scale * 100) + "%";
+}
+
+function zoom(id, delta){
+  const v = getViewer(id);
+  v.scale = Math.min(5, Math.max(0.5, v.scale + delta));
+  applyTransform(id);
+}
+function zoomReset(id){
+  const v = getViewer(id);
+  v.scale = 1;
+  applyTransform(id);
+}
+
+/* ─── Force download (fetch blob → anchor click) ─────────────── */
+async function downloadResult(){
+  if(!currentResultUrl){ toast("⚠ No result to download yet"); return; }
+  try{
+    const res  = await fetch(currentResultUrl);
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = currentResultName || "detection_result.jpg";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast("⬇ Download started");
+  }catch(err){
+    toast("❌ Download failed — check backend"); console.error(err);
+  }
+}
+
+async function downloadBatchItem(url, filename){
+  try{
+    const res  = await fetch(url);
+    const blob = await res.blob();
+    const burl = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = burl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(burl), 5000);
+    toast("⬇ Download started");
+  }catch(err){
+    toast("❌ Download failed"); console.error(err);
+  }
+}
+
+/* ─── Toast ─────────────────────────────────────────────────── */
+function toast(msg, ms=3000){
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), ms);
+}
+
+/* ─── Tab ───────────────────────────────────────────────────── */
+function goTab(name, btn){
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  btn.classList.add("active");
+  if(name === "analytics") loadMetrics();
+}
+
+/* ─── Helpers ───────────────────────────────────────────────── */
+const pct = v => (v * 100).toFixed(1) + "%";
+
+/* ─── Image preview ─────────────────────────────────────────── */
+document.getElementById("fileInput").addEventListener("change", function(e){
+  const file = e.target.files[0]; if(!file) return;
+  document.getElementById("detectBtn").disabled = false;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById("inputImg");
+    const ph  = document.querySelector("#inputViewer .img-ph");
+    img.src = ev.target.result; img.style.display = "block";
+    if(ph) ph.style.display = "none";
+    zoomReset("inputViewer");
+  };
+  reader.readAsDataURL(file);
+});
+
+/* ─── Single Detection ──────────────────────────────────────── */
+async function runDetection(){
+  const imgFile = document.getElementById("fileInput").files[0];
+  if(!imgFile){ toast("⚠ Upload an image first"); return; }
+
+  const loader    = document.getElementById("singleLoader");
+  const detectBtn = document.getElementById("detectBtn");
+  loader.style.display = "flex"; detectBtn.disabled = true;
+
+  try{
+    const fd = new FormData(); fd.append("file", imgFile);
+    const res  = await fetch(API + "/detect", { method:"POST", body:fd });
+    const data = await res.json();
+    if(data.error){ toast("❌ " + data.error); return; }
+
+    /* Result image */
+    const resultUrl = API + data.image_url + "?t=" + Date.now();
+    currentResultUrl  = resultUrl;
+    currentResultName = "detection_" + imgFile.name;
+
+    const ri  = document.getElementById("resultImg");
+    ri.src = resultUrl; ri.style.display = "block";
+    const rph = document.querySelector("#resultViewer .img-ph");
+    if(rph) rph.style.display = "none";
+    zoomReset("resultViewer");
+
+    /* Action bar */
+    document.getElementById("singleActionBar").style.display = "flex";
+
+    /* Detection tags */
+    let html = "";
+    if(data.gt_count > 0)
+      html += `<div class="tag tag-gt">🟩 Ground Truth: ${data.gt_count} box(es)</div>`;
+    data.detections.forEach(d => {
+      html += `<div class="tag">✈ ${d.class_name} · ${(d.confidence*100).toFixed(1)}%</div>`;
+    });
+    if(!data.detections.length)
+      html += `<div class="tag tag-info">No aircraft detected above threshold</div>`;
+    document.getElementById("detections").innerHTML = html;
+
+    toast(`✅ ${data.detections.length} detection(s)`);
+
+  }catch(err){
+    toast("❌ Connection error — is backend running?"); console.error(err);
+  }finally{
+    loader.style.display = "none"; detectBtn.disabled = false;
+  }
+}
+
+/* ─── Batch Detection ───────────────────────────────────────── */
+async function runBatch(){
+  const files = document.getElementById("batchInput").files;
+  if(!files.length){ toast("⚠ Select at least one image"); return; }
+
+  const loader = document.getElementById("batchLoader");
+  loader.style.display = "flex";
+  document.getElementById("batchResults").innerHTML = "";
+
+  try{
+    const fd = new FormData();
+    for(const f of files) fd.append("files", f);
+    const res  = await fetch(API + "/detect-batch", { method:"POST", body:fd });
+    const data = await res.json();
+
+    let html = "";
+    data.results.forEach((r, idx) => {
+      const imgUrl = API + r.image + "?t=" + Date.now();
+      const vidId  = `bv-${idx}`;
+      const dlName = "det_" + r.filename;
+      html += `
+        <div class="bi">
+          <div class="bi-img-wrap" id="${vidId}">
+            <img src="${imgUrl}" alt="${r.filename}">
+          </div>
+          <div class="bi-foot">
+            📄 ${r.filename}<br>
+            ✈ ${r.detections.length} aircraft · 🟩 ${r.gt_count} Ground Truth
+          </div>
+          <div class="bi-actions">
+            <button class="bi-zoom-btn" onclick="batchZoom('${vidId}',-0.2)">−</button>
+            <button class="bi-zoom-btn" onclick="batchZoom('${vidId}', 0.2)">+</button>
+            <button class="bi-zoom-btn" onclick="batchZoomReset('${vidId}')" style="font-size:.65rem;">⟳</button>
+            <span style="flex:1"></span>
+            <button class="btn-sm" onclick="downloadBatchItem('${imgUrl}','${dlName}')"
+                    style="padding:5px 12px;font-size:.74rem;">⬇</button>
+          </div>
+        </div>`;
+    });
+    document.getElementById("batchResults").innerHTML = html;
+
+    toast(`✅ Processed ${data.results.length} image(s)`);
+
+  }catch(err){
+    toast("❌ Connection error — is backend running?");
+  }finally{
+    loader.style.display = "none";
+  }
+}
+
+/* ─── Batch item zoom only (no drag/wheel) ──────────────────── */
+const bViewers = {};
+function getBV(id){ if(!bViewers[id]) bViewers[id] = { scale:1 }; return bViewers[id]; }
+function bApply(id){
+  const v   = getBV(id);
+  const img = document.querySelector(`#${id} img`); if(!img) return;
+  img.style.transform = `scale(${v.scale})`;
+}
+function batchZoom(id, d){ const v = getBV(id); v.scale = Math.min(5, Math.max(0.5, v.scale + d)); bApply(id); }
+function batchZoomReset(id){ const v = getBV(id); v.scale = 1; bApply(id); }
+
+/* ─── Analytics ─────────────────────────────────────────────── */
+async function loadMetrics(){
+  try{
+    const res = await fetch(API + "/metrics");
+    const d   = await res.json();
+
+    document.getElementById("mAcc").textContent = pct(d.accuracy);
+    document.getElementById("mPre").textContent = pct(d.precision);
+    document.getElementById("mRec").textContent = pct(d.recall);
+    document.getElementById("mM50").textContent = pct(d.map50);
+
+    buildBarChart(d);
+    buildCM(d.confusion_matrix, d.class_names, d.total_matched);
+
+  }catch(err){
+    toast("⚠ Could not load metrics — check backend"); console.warn(err);
+  }
+}
+
+/* ─── Bar chart ─────────────────────────────────────────────── */
+function buildBarChart(d){
+  if(barInst) barInst.destroy();
+  const ctx = document.getElementById("barChart").getContext("2d");
+  barInst = new Chart(ctx, {
+    type:"bar",
+    data:{
+      labels:["Accuracy","Precision","Recall","mAP@0.5"],
+      datasets:[{
+        data:[d.accuracy*100, d.precision*100, d.recall*100, d.map50*100],
+        backgroundColor:[
+          "rgba(255,140,0,.82)","rgba(220,80,0,.82)",
+          "rgba(255,60,60,.82)","rgba(255,180,0,.82)"
+        ],
+        borderRadius:10, borderSkipped:false
+      }]
+    },
+    options:{
+      plugins:{ legend:{ display:false } },
+      scales:{
+        y:{ min:0, max:100,
+            ticks:{ color:"#999", callback: v => v+"%" },
+            grid:{ color:"rgba(255,255,255,.05)" }
+        },
+        x:{ ticks:{ color:"#999" }, grid:{ display:false } }
+      }
+    }
+  });
+}
+
+/* ─── Confusion Matrix ──────────────────────────────────────── */
+function buildCM(matrix, names, totalMatched){
+  const cm     = document.getElementById("cm");
+  const badge  = document.getElementById("cmBadge");
+  const legend = document.getElementById("cmLegend");
+
+  if(!totalMatched || totalMatched === 0){
+    cm.innerHTML = `<div class="cm-empty">Run detections on dataset images to populate the matrix.</div>`;
+    badge.textContent = "🔄 No matched pairs yet — run detection first";
+    legend.style.display = "none";
+    return;
+  }
+
+  badge.textContent = `📊 ${totalMatched} matched GT↔Pred pair(s) this session`;
+  legend.style.display = "flex";
+
+  const n   = matrix.length;
+  const max = Math.max(...matrix.flat(), 1);
+  const short = s => s.length > 7 ? s.slice(0,6) + "…" : s;
+
+  cm.style.gridTemplateColumns = `22px repeat(${n+1}, 62px)`;
+  let html = "";
+
+  /* header row */
+  html += `<div></div>`;
+  html += `<div class="cm-hdr" style="font-size:.55rem;opacity:.35;">Actual ▶</div>`;
+  names.forEach(name => { html += `<div class="cm-hdr">${short(name)}</div>`; });
+
+  /* data rows */
+  matrix.forEach((row, ri) => {
+    if(ri === 0)
+      html += `<div class="cm-axis" style="grid-row:span ${n};">Predicted ▼</div>`;
+    html += `<div class="cm-hdr">${short(names[ri])}</div>`;
+    row.forEach((val, ci) => {
+      const t = val / max;
+      let bg, tip;
+      if(ri === ci){
+        bg  = val > 0 ? `rgba(255,160,0,${.12 + t*.80})` : `rgba(255,255,255,.04)`;
+        tip = val > 0
+          ? `✅ Correct: Predicted ${names[ri]}, GT ${names[ci]} (${val})`
+          : `Predicted ${names[ri]} / GT ${names[ci]}: 0`;
+      } else {
+        bg  = val > 0 ? `rgba(220,30,30,${.12 + t*.72})` : `rgba(255,255,255,.04)`;
+        tip = val > 0
+          ? `❌ Misclassified: Predicted ${names[ri]}, GT was ${names[ci]} (${val})`
+          : `Predicted ${names[ri]} / GT ${names[ci]}: 0`;
+      }
+      const col = t > 0.42 ? "#fff" : "#999";
+      html += `<div class="cm-cell"
+                 style="background:${bg};color:${col};"
+                 data-tip="${tip}">${val}</div>`;
+    });
+  });
+
+  cm.innerHTML = html;
+}
+
+/* ─── Clear session ─────────────────────────────────────────── */
+async function clearSession(){
+  try{
+    await fetch(API + "/clear-session", { method:"POST" });
+    await loadMetrics();
+    ["mAcc","mPre","mRec","mM50"].forEach(id => {
+      document.getElementById(id).textContent = "--";
+    });
+    currentResultUrl  = "";
+    currentResultName = "";
+    toast("🗑 Session reset");
+  }catch{
+    toast("❌ Could not reach backend");
+  }
+}
+
+/* ─── Boot ──────────────────────────────────────────────────── */
+window.addEventListener("load", () => {
+  setTimeout(loadMetrics, 400);
+});
+</script>
+</body>
+</html>
