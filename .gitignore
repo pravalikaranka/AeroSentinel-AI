@@ -1,0 +1,16 @@
+desktop.ini
+__pycache__/
+*.pyc
+
+.venv/
+venv/
+env/
+
+.vscode/
+.idea/
+
+backend/uploads/
+backend/outputs/
+
+*.pt
+*.pth
